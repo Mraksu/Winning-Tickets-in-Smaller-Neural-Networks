@@ -1,3 +1,6 @@
+''' This file contains some of the most used funtcions in the
+main experiment'''
+
 import tensorflow as tf
 from tensorflow_model_optimization.sparsity import keras as sparsity
 import numpy as np
@@ -5,8 +8,11 @@ import json
 import os
 
 def parameter_count(model_name,model,verbose=0):
-    '''To check the number of parameters in each layer,
-    also to control the total number of parameter'''
+    '''To check the number of the nonzero parameters in each layer,
+    also to control the total number of parameter
+    if verbose=1 than it will print out the number of the
+    nonzero parameters in the model.
+    '''
     if verbose==0:
 
         sum_params = 0
@@ -32,6 +38,10 @@ def define_pruning_params(target=0.0,begin=0,end=0,freq=100):
 
     '''This function is used to create pruning parameters that is used in the
     pruned_nn model.
+
+    check the official website for the information about the arguments
+    https://www.tensorflow.org/model_optimization/api_docs/python/tfmot/sparsity/keras/ConstantSparsity
+
     '''
 
     if target==0.0:
@@ -59,8 +69,15 @@ def define_pruning_params(target=0.0,begin=0,end=0,freq=100):
         }
         return [prun,prun_out]
 
-def pruning_rounds(model,pruning_percentage=0.2):
+def pruning_rounds(model,pruning_percentage=0.2,target=0.01):
+    '''This function calculates the number of pruning pruning_rounds
+    and corresponding pruning rates for each rounds
+    Arguments:
+    pruning_percentage= Desired pruning percentage for iterative pruning rounds
+    target= Target sparsity value
 
+    returns number of pruning rounds and corresponding pruning rates
+     '''
     dense1=tf.math.count_nonzero(model.trainable_weights[0],axis=None).numpy()
     dense2=tf.math.count_nonzero(model.trainable_weights[2],axis=None).numpy()
     op=tf.math.count_nonzero(model.trainable_weights[4],axis=None).numpy()
@@ -70,9 +87,9 @@ def pruning_rounds(model,pruning_percentage=0.2):
     print('Number of initial parameters:')
     print('dense1:{}, dense2:{}, op:{}, total:{}'.format(dense1,dense2,op,total_param))
 
-    dense_p=0.20
+    dense_p=pruning_percentage
     op_p=dense_p/2
-    min_param=total_param*0.01 #here I will go as far as %1 percent of total weights since in the original paper results
+    min_param=total_param*target #here I will go as far as %1 percent of total weights since in the original paper results
     #are not reliable after 3.6%
     print('min possible params:{}'.format(min_param))
 
@@ -107,6 +124,8 @@ def prune_network(model,pruning_percentage=0.2):
 
     model: The Keras model object that is going to be pruned.
     pruning_percentage: The pruning percentage.
+
+    modifies and prunes the model
     '''
 
 
@@ -116,7 +135,7 @@ def prune_network(model,pruning_percentage=0.2):
             orig_shape=layer.get_weights()[0].shape
             flat_weights=layer.get_weights()[0].flatten()
             sorted_weights=np.sort(np.abs(flat_weights))
-            cutoff_index=np.round(pruning_percentage*sorted_weights.size).astype(np.int)
+            cutoff_index=np.floor(pruning_percentage*sorted_weights.size).astype(np.int)
             cutoff=sorted_weights[cutoff_index]
             flat_weights=np.where(np.abs(flat_weights)<=cutoff,0,flat_weights)
             new_weights=[1,2] #to assign new weights
@@ -128,7 +147,7 @@ def prune_network(model,pruning_percentage=0.2):
             orig_shape=layer.get_weights()[0].shape
             flat_weights=layer.get_weights()[0].flatten()
             sorted_weights=np.sort(np.abs(flat_weights))
-            cutoff_index=np.round((pruning_percentage/2)*sorted_weights.size).astype(np.int)
+            cutoff_index=np.floor((pruning_percentage/2)*sorted_weights.size).astype(np.int)
             cutoff=sorted_weights[cutoff_index]
             flat_weights=np.where(np.abs(flat_weights)<=cutoff,0,flat_weights)
             new_weights=[1,2] #to assign new weights
@@ -137,6 +156,9 @@ def prune_network(model,pruning_percentage=0.2):
             layer.set_weights(new_weights)
 
 def encode_save_json(dic,filename):
+    '''Some data types are not supported by json.
+    this functions encodes the given dictionary and
+    saves it as a json file'''
     for i in dic.keys():
         for k,v in dic[i].items():
             if type(v)==np.ndarray:
@@ -152,6 +174,7 @@ def encode_save_json(dic,filename):
         print('file does not saved, something wrong')
 
 def decode_json(file_name):
+    '''This function decodes the json into dictionary format'''
     with open(file_name, 'r') as fp:
         json_st=fp.read()
         dic=json.loads(json_st)
